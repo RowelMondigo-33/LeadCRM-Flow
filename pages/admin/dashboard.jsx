@@ -1,12 +1,40 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 
 export default function AdminDashboard() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const router = useRouter();
 
   useEffect(() => {
-    fetchLeads();
+    // 1. Verify User Session
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/admin/login');
+      } else {
+        fetchLeads();
+      }
+    };
+
+    checkUser();
+
+    // 2. Set up Supabase Realtime Subscription
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leads' },
+        () => fetchLeads()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchLeads = async () => {
@@ -16,124 +44,140 @@ export default function AdminDashboard() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching leads:', error);
-    } else {
-      setLeads(data || []);
-    }
+    if (!error) setLeads(data || []);
     setLoading(false);
   };
 
-  const updateStatus = async (id, newStatus) => {
-    const { error } = await supabase
-      .from('leads')
-      .update({ status: newStatus })
-      .eq('id', id);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/admin/login');
+  };
 
-    if (error) {
-      console.error('Error updating status:', error);
-    } else {
-      setLeads(leads.map((lead) => (lead.id === id ? { ...lead, status: newStatus } : lead)));
+  const handleStatusChange = async (id, newStatus) => {
+    await supabase.from('leads').update({ status: newStatus }).eq('id', id);
+    fetchLeads();
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm('Sigurado ka bang gusto mong burahin ang lead na ito?')) {
+      await supabase.from('leads').delete().eq('id', id);
+      fetchLeads();
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'New':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'Contacted':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Scheduled':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Completed':
-        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'Lost':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
-      default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
-    }
-  };
+  // Filter & Search Logic
+  const filteredLeads = leads.filter((lead) => {
+    const matchesSearch =
+      lead.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      lead.email?.toLowerCase().includes(search.toLowerCase()) ||
+      lead.service?.toLowerCase().includes(search.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === 'All' || lead.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-600">Loading Dashboard...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 font-sans">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Lead Management Dashboard</h1>
-            <p className="text-sm text-slate-500 mt-1">Monitor incoming business inquiries and track client statuses in real-time.</p>
+            <h1 className="text-3xl font-bold text-gray-800">Lead Management Dashboard</h1>
+            <p className="text-gray-500">Monitor incoming business inquiries in real-time.</p>
           </div>
           <button
-            onClick={fetchLeads}
-            className="inline-flex items-center justify-center px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+            onClick={handleLogout}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
           >
-            Refresh Leads
+            Logout
           </button>
         </div>
 
-        {loading ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
-            <p className="text-slate-500 animate-pulse">Loading leads...</p>
-          </div>
-        ) : leads.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
-            <p className="text-slate-500">No leads received yet.</p>
-          </div>
-        ) : (
-          <div className="bg-white shadow-xl rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact Info</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Service Requested</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
+        {/* Controls: Search & Filter */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <input
+            type="text"
+            placeholder="Search by name, email, or service..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="All">All Statuses</option>
+            <option value="New">New</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-xl shadow overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-100 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase">
+                <th className="p-4">Customer</th>
+                <th className="p-4">Contact Info</th>
+                <th className="p-4">Service</th>
+                <th className="p-4">Notes</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 text-sm">
+              {filteredLeads.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="p-4 text-center text-gray-500">
+                    No leads found.
+                  </td>
+                </tr>
+              ) : (
+                filteredLeads.map((lead) => (
+                  <tr key={lead.id} className="hover:bg-gray-50">
+                    <td className="p-4 font-semibold text-gray-800">{lead.full_name}</td>
+                    <td className="p-4">
+                      <div>{lead.email}</div>
+                      <div className="text-gray-400 text-xs">{lead.phone}</div>
+                    </td>
+                    <td className="p-4 text-gray-600">{lead.service}</td>
+                    <td className="p-4 text-gray-500 max-w-xs truncate">{lead.notes}</td>
+                    <td className="p-4">
+                      <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                        {lead.status || 'New'}
+                      </span>
+                    </td>
+                    <td className="p-4 flex gap-2 justify-center">
+                      <select
+                        value={lead.status || 'New'}
+                        onChange={(e) => handleStatusChange(lead.id, e.target.value)}
+                        className="p-1 text-xs border rounded bg-white"
+                      >
+                        <option value="New">New</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Closed">Closed</option>
+                      </select>
+                      <button
+                        onClick={() => handleDelete(lead.id)}
+                        className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
-                  {leads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-slate-50/50 transition">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-semibold text-slate-900">{lead.full_name}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{new Date(lead.created_at).toLocaleDateString()}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                        <div className="font-medium text-slate-900">{lead.email}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{lead.phone}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 font-medium">
-                        {lead.service_requested}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">
-                        {lead.notes || '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs font-semibold rounded-full border ${getStatusBadge(lead.status)}`}>
-                          {lead.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <select
-                          value={lead.status}
-                          onChange={(e) => updateStatus(lead.id, e.target.value)}
-                          className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                        >
-                          <option value="New">New</option>
-                          <option value="Contacted">Contacted</option>
-                          <option value="Scheduled">Scheduled</option>
-                          <option value="Completed">Completed</option>
-                          <option value="Lost">Lost</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
