@@ -28,37 +28,43 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
-      <div className="max-w-md w-full bg-gray-800 p-8 rounded-xl shadow-lg border border-gray-700">
-        <h2 className="text-2xl font-bold text-center mb-6">Admin Login</h2>
-        
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-4 font-sans">
+      <div className="max-w-md w-full bg-slate-900 p-8 rounded-2xl shadow-2xl border border-slate-800">
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center font-extrabold text-white text-xl mx-auto mb-3 shadow-lg shadow-indigo-600/30">
+            LC
+          </div>
+          <h2 className="text-2xl font-black">LeadCRM Flow</h2>
+          <p className="text-xs text-slate-400 mt-1">Enterprise Admin Authentication</p>
+        </div>
+
         {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-300 p-3 rounded mb-4 text-sm">
-            {error}
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-3 rounded-xl mb-6 text-xs text-center font-semibold">
+            ⚠️ {error}
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Admin Email</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-2.5 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-indigo-500"
-              placeholder="admin@example.com"
+              className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
+              placeholder="admin@leadcrmflow.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Password</label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2.5 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-indigo-500"
+              className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
               placeholder="••••••••"
             />
           </div>
@@ -66,9 +72,9 @@ export default function AdminLogin() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold transition text-white"
+            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-indigo-600/30"
           >
-            {loading ? 'Logging in...' : 'Sign In'}
+            {loading ? 'Authenticating...' : 'Sign In to Dashboard'}
           </button>
         </form>
       </div>
